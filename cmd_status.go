@@ -58,6 +58,11 @@ func cmdStatus(args []string) error {
 	} else {
 		fmt.Printf("approval    off — steward watches and records, you still see every prompt\n")
 	}
+	if cfg.GuardBashWrites {
+		fmt.Printf("write guard on — a Bash command that writes a file directly asks first\n")
+	} else {
+		fmt.Printf("write guard off — direct file writes are recorded, not questioned\n")
+	}
 	fmt.Printf("decisions   %d in the last %s — %d allowed · %d denied · %d asked\n",
 		len(entries), since, counts["allow"], counts["deny"], counts["defer"])
 	return nil

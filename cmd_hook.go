@@ -43,7 +43,11 @@ func cmdHook(args []string) error {
 	if len(args) > 0 {
 		event = args[0]
 	}
-	if event != "permission-request" && event != "PermissionRequest" {
+	switch event {
+	case "permission-request", "PermissionRequest":
+	case "pre-tool-use", "PreToolUse":
+		return hookPreToolUse()
+	default:
 		return fmt.Errorf("unknown hook event %q", event)
 	}
 

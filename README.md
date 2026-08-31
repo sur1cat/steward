@@ -69,6 +69,26 @@ part that trips people up:
 Every subcommand must be covered independently. `psql -h db` is approved by
 `Bash(psql:*)`; `psql -h db && rm -rf /tmp/x` is not, and never will be.
 
+## Asking before Bash writes a file
+
+```sh
+steward install --guard-writes    # and --no-guard-writes to stop
+```
+
+A file written by `sed -i`, a shell redirect or `tee` never passes through the
+Edit or Write tools. That has three consequences nobody is told about: `/rewind`
+cannot undo it, because Claude Code's file history never saw it; the next read
+pays full price, because the Read cache does not know the file changed; and
+the change is missing from the structured patch record, so nothing downstream
+can see what happened.
+
+On the machine steward was built for there were 125,722 Bash calls against
+6,481 Edit and Write calls, so this is not a rare path.
+
+The guard **asks** rather than refuses, because writing a file from the shell
+is sometimes exactly what was meant and a guard that blocks real work gets
+uninstalled. Without the setting steward records these calls and says nothing.
+
 ## The log
 
 ```

@@ -13,6 +13,12 @@ type Config struct {
 	// AutoAllow lets steward approve a call its rules cover instead of
 	// deferring to the prompt. Off unless explicitly turned on.
 	AutoAllow bool `json:"auto_allow"`
+
+	// GuardBashWrites turns a Bash command that writes a file directly into a
+	// prompt. Such a write is invisible to /rewind and to the Read cache, but
+	// it is also sometimes exactly what you meant, so this asks rather than
+	// refuses, and it is off until asked for.
+	GuardBashWrites bool `json:"guard_bash_writes"`
 }
 
 // stewardDir is where the config and the audit log live.

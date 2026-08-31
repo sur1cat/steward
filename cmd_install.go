@@ -17,13 +17,35 @@ import (
 // Code from starting, and that is a far worse outcome than an unwired hook.
 func cmdInstall(args []string) error {
 	var remove, autoAllow, noAutoAllow, printOnly bool
+	var guardWrites, noGuardWrites bool
 	fs := flag.NewFlagSet("install", flag.ContinueOnError)
 	fs.BoolVar(&remove, "remove", false, "take the hook back out")
 	fs.BoolVar(&autoAllow, "auto-allow", false, "let steward approve calls your rules already cover")
 	fs.BoolVar(&noAutoAllow, "no-auto-allow", false, "go back to only watching and recording")
+	fs.BoolVar(&guardWrites, "guard-writes", false, "ask before a Bash command writes a file directly")
+	fs.BoolVar(&noGuardWrites, "no-guard-writes", false, "stop asking about direct file writes")
 	fs.BoolVar(&printOnly, "print", false, "show the change without writing it")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+
+	if guardWrites || noGuardWrites {
+		cfg := loadConfig()
+		cfg.GuardBashWrites = guardWrites && !noGuardWrites
+		if !printOnly {
+			if err := saveConfig(cfg); err != nil {
+				return err
+			}
+		}
+		if cfg.GuardBashWrites {
+			fmt.Println("A Bash command that writes a file directly will now ask first.")
+			fmt.Println("Such a write is invisible to /rewind and to the Read cache.")
+		} else {
+			fmt.Println("Direct file writes will be recorded but not questioned.")
+		}
+		if !cfg.GuardBashWrites && !remove && !autoAllow {
+			return nil
+		}
 	}
 
 	if autoAllow || noAutoAllow {
@@ -65,6 +87,12 @@ func cmdInstall(args []string) error {
 		}
 	}
 	changed := setHook(doc, bin, remove)
+	// The write guard rides on a second event. Both go in together: a guard
+	// that is installed but never consulted is worse than one that is absent,
+	// because the settings file says it is watching.
+	if setEventHook(doc, "PreToolUse", bin+" hook pre-tool-use", remove) {
+		changed = true
+	}
 	if !changed {
 		if remove {
 			fmt.Println("The hook was not installed; nothing to remove.")
@@ -109,6 +137,11 @@ func cmdInstall(args []string) error {
 // setHook adds or removes steward's PermissionRequest entry, leaving every
 // other hook in the file untouched. It reports whether anything changed.
 func setHook(doc map[string]any, bin string, remove bool) bool {
+	return setEventHook(doc, "PermissionRequest", bin+" hook permission-request", remove)
+}
+
+// setEventHook adds or removes one steward entry under one event name.
+func setEventHook(doc map[string]any, event, command string, remove bool) bool {
 	hooks, _ := doc["hooks"].(map[string]any)
 	if hooks == nil {
 		if remove {
@@ -116,7 +149,7 @@ func setHook(doc map[string]any, bin string, remove bool) bool {
 		}
 		hooks = map[string]any{}
 	}
-	list, _ := hooks["PermissionRequest"].([]any)
+	list, _ := hooks[event].([]any)
 
 	var kept []any
 	found := false
@@ -132,9 +165,9 @@ func setHook(doc map[string]any, bin string, remove bool) bool {
 			return false
 		}
 		if len(kept) == 0 {
-			delete(hooks, "PermissionRequest")
+			delete(hooks, event)
 		} else {
-			hooks["PermissionRequest"] = kept
+			hooks[event] = kept
 		}
 		if len(hooks) == 0 {
 			delete(doc, "hooks")
@@ -149,10 +182,10 @@ func setHook(doc map[string]any, bin string, remove bool) bool {
 	kept = append(kept, map[string]any{
 		"hooks": []any{map[string]any{
 			"type":    "command",
-			"command": bin + " hook permission-request",
+			"command": command,
 		}},
 	})
-	hooks["PermissionRequest"] = kept
+	hooks[event] = kept
 	doc["hooks"] = hooks
 	return true
 }
@@ -183,7 +216,8 @@ func isStewardEntry(entry any) bool {
 // entry; matching a fixed path would miss our own after a move or a rename,
 // and a missed entry means the next install silently adds a duplicate.
 func ownsCommand(cmd string) bool {
-	if !strings.Contains(cmd, "hook permission-request") {
+	if !strings.Contains(cmd, "hook permission-request") &&
+		!strings.Contains(cmd, "hook pre-tool-use") {
 		return false
 	}
 	fields := strings.Fields(cmd)
