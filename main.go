@@ -38,6 +38,8 @@ func run(args []string) error {
 		return cmdLog(args)
 	case "status":
 		return cmdStatus(args)
+	case "test":
+		return cmdTest(args)
 	case "install":
 		return cmdInstall(args)
 	case "version", "--version", "-v":
@@ -58,6 +60,7 @@ Usage:
   steward rules          the permission rules in force here, in order
   steward log            every decision made, newest last
   steward status         whether the hook is wired in, and what it has decided
+  steward test "CMD"     answer a hook without starting a session
   steward install        wire the hook into Claude Code
   steward hook EVENT     answer a hook (Claude Code calls this, not you)
   steward version        print the version

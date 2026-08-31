@@ -89,6 +89,19 @@ The guard **asks** rather than refuses, because writing a file from the shell
 is sometimes exactly what was meant and a guard that blocks real work gets
 uninstalled. Without the setting steward records these calls and says nothing.
 
+## Trying a hook without starting a session
+
+```sh
+steward test "make build && rm -rf build"
+steward test --event pre-tool-use "sed -i '' s/a/b/ main.go"
+```
+
+Hooks are the one part of a Claude Code setup you cannot try. You change a
+script, start a session, and learn from behaviour whether it worked; the two
+community tools for this are both abandoned. `steward test` sends the payload
+Claude Code would send, through the same code that answers the real event, and
+prints both halves — so a dry run and the real thing cannot diverge.
+
 ## The log
 
 ```
