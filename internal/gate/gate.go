@@ -95,15 +95,15 @@ func Evaluate(req Request, rules []perms.Rule, opt Options) Result {
 	// Deny first, then ask, then allow — the order Claude Code documents. A
 	// deny match here is belt and braces: Claude Code should have blocked the
 	// call before the hook ran, so reaching this means its matcher disagreed.
-	if r, ok := firstMatch(scoped, "deny", req.Tool, subject); ok {
+	if r, ok := firstMatch(scoped, "deny", req.Tool, subject, anySubcommand); ok {
 		return Result{Decision: Deny, Rule: r.Raw, Subject: subject,
 			Reason: "a deny rule covers this"}
 	}
-	if r, ok := firstMatch(scoped, "ask", req.Tool, subject); ok {
+	if r, ok := firstMatch(scoped, "ask", req.Tool, subject, anySubcommand); ok {
 		return Result{Decision: Defer, Rule: r.Raw, Subject: subject,
 			Reason: "an ask rule covers this, so it must be asked"}
 	}
-	if r, ok := firstMatch(scoped, "allow", req.Tool, subject); ok {
+	if r, ok := firstMatch(scoped, "allow", req.Tool, subject, everySubcommand); ok {
 		if !opt.AutoAllow {
 			return Result{Decision: Defer, Rule: r.Raw, Subject: subject,
 				Reason: "an allow rule covers this, but auto-approval is off"}
@@ -125,8 +125,39 @@ func forTool(rules []perms.Rule, tool string) []perms.Rule {
 	return out
 }
 
-// firstMatch finds the first rule of a kind that covers the subject.
-func firstMatch(rules []perms.Rule, kind, tool, subject string) (perms.Rule, bool) {
+// quantifier decides how a rule applies to a command made of several
+// subcommands. The two kinds pull in opposite directions and each must be the
+// cautious one for its purpose: an approval is only safe if it covers
+// everything that will run, while a refusal has to fire if any part of what
+// will run is refused.
+type quantifier func(pattern, command string) bool
+
+// everySubcommand approves only a command whose every part is covered, so
+// "psql -h db && rm -rf /tmp" is not approved by Bash(psql:*).
+func everySubcommand(pattern, command string) bool {
+	return perms.MatchBash(pattern, command)
+}
+
+// anySubcommand refuses a command if any part of it is refused, so
+// "make build && rm -rf /" is caught by Bash(rm -rf:*). Requiring every part
+// to match would have let exactly that through.
+func anySubcommand(pattern, command string) bool {
+	parts, ok := perms.SplitCommand(command)
+	if !ok {
+		// Unparseable: err toward the rule applying rather than not.
+		return perms.MatchBashPattern(pattern, command)
+	}
+	for _, p := range parts {
+		if perms.MatchBashPattern(pattern, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// firstMatch finds the first rule of a kind that covers the subject, under the
+// quantifier appropriate to that kind.
+func firstMatch(rules []perms.Rule, kind, tool, subject string, q quantifier) (perms.Rule, bool) {
 	for _, r := range rules {
 		if r.Kind != kind {
 			continue
@@ -134,7 +165,7 @@ func firstMatch(rules []perms.Rule, kind, tool, subject string) (perms.Rule, boo
 		if r.Bare {
 			return r, true // a bare tool name matches every call to it
 		}
-		if matches(tool, r.Arg, subject) {
+		if matches(tool, r.Arg, subject, q) {
 			return r, true
 		}
 	}
@@ -144,10 +175,10 @@ func firstMatch(rules []perms.Rule, kind, tool, subject string) (perms.Rule, boo
 // matches applies the right comparison for the tool. Only Bash is decided
 // here; path and URL rules use anchoring that depends on which settings file a
 // rule came from, and guessing at it would enforce the wrong thing.
-func matches(tool, pattern, subject string) bool {
+func matches(tool, pattern, subject string, q quantifier) bool {
 	switch tool {
 	case "Bash", "PowerShell":
-		return perms.MatchBash(pattern, subject)
+		return q(pattern, subject)
 	case "WebFetch":
 		host := strings.TrimPrefix(pattern, "domain:")
 		return host != pattern && hostOf(subject) == host

@@ -134,3 +134,39 @@ func TestSubjectOnlyReadsTheDocumentedField(t *testing.T) {
 		t.Errorf("Edit should read file_path, got %q %v", s, ok)
 	}
 }
+
+func TestDenyFiresOnAnyPartOfACompoundCommand(t *testing.T) {
+	// The two kinds quantify in opposite directions, and getting this backwards
+	// let "make build && rm -rf /" past a Bash(rm -rf:*) deny rule, because not
+	// every part of it matched. Found by running the real rules of a real
+	// project through it.
+	rules := []perms.Rule{
+		rule("deny", "Bash(rm -rf:*)"),
+		rule("allow", "Bash(make:*)"),
+	}
+	denied := []string{
+		"rm -rf /tmp/x",
+		"make build && rm -rf /tmp/x",
+		"echo hi; rm -rf /tmp/x",
+		"rm -rf /tmp/x | tee log",
+	}
+	for _, cmd := range denied {
+		if got := Evaluate(bash(cmd), rules, on); got.Decision != Deny {
+			t.Errorf("%q should be denied, got %s", cmd, got.Decision)
+		}
+	}
+	if got := Evaluate(bash("make build"), rules, on); got.Decision != Allow {
+		t.Errorf("an unrelated command should still pass, got %s", got.Decision)
+	}
+}
+
+func TestAskFiresOnAnyPartToo(t *testing.T) {
+	rules := []perms.Rule{
+		rule("allow", "Bash(git:*)"),
+		rule("ask", "Bash(curl:*)"),
+	}
+	got := Evaluate(bash("git status && curl https://example.com"), rules, on)
+	if got.Decision != Defer {
+		t.Errorf("a command containing an ask-rule match must reach the human, got %s", got.Decision)
+	}
+}
