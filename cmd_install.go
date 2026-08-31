@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -32,6 +33,13 @@ func cmdInstall(args []string) error {
 			if err := saveConfig(cfg); err != nil {
 				return err
 			}
+		}
+		// Turning approval off is not a reason to wire the hook in. Without
+		// this, switching the second toggle off in a user interface silently
+		// switched the first one on.
+		if !cfg.AutoAllow && !remove {
+			fmt.Println("steward will watch and record; every prompt you would have seen, you see.")
+			return nil
 		}
 		if cfg.AutoAllow {
 			fmt.Println("steward will now approve a call when your own rules already cover it.")
@@ -162,21 +170,27 @@ func isStewardEntry(entry any) bool {
 		if !ok {
 			continue
 		}
-		if cmd, _ := hm["command"].(string); containsSteward(cmd) {
+		if cmd, _ := hm["command"].(string); ownsCommand(cmd) {
 			return true
 		}
 	}
 	return false
 }
 
-func containsSteward(s string) bool {
-	const needle = "steward hook"
-	for i := 0; i+len(needle) <= len(s); i++ {
-		if s[i:i+len(needle)] == needle {
-			return true
-		}
+// ownsCommand reports whether a hook command is one steward wrote. It looks at
+// both halves: the subcommand only steward defines, and the name of the binary
+// being run. Matching the subcommand alone would risk removing another tool's
+// entry; matching a fixed path would miss our own after a move or a rename,
+// and a missed entry means the next install silently adds a duplicate.
+func ownsCommand(cmd string) bool {
+	if !strings.Contains(cmd, "hook permission-request") {
+		return false
 	}
-	return false
+	fields := strings.Fields(cmd)
+	if len(fields) == 0 {
+		return false
+	}
+	return strings.Contains(strings.ToLower(filepath.Base(fields[0])), "steward")
 }
 
 // backup copies the settings file next to itself before it is rewritten.
