@@ -1,0 +1,79 @@
+version: 2
+project_name: steward
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: steward
+    main: .
+    binary: steward
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    goos:   [linux, darwin, windows]
+    goarch: [amd64, arm64]
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude: ['^docs:', '^test:', '^chore:']
+
+release:
+  draft: false
+  prerelease: auto
+
+# Publishes the formula to github.com/sur1cat/homebrew-tap on every tag, with
+# the archive URLs and checksums filled in from the release that was just cut.
+# The tap is the realistic route: homebrew-core requires a level of notability
+# a new project does not have, and a tap needs nobody's approval.
+brews:
+  - name: steward
+    repository:
+      owner: sur1cat
+      name: homebrew-tap
+      branch: main
+      # A token with contents:write on the tap repo. The default GITHUB_TOKEN
+      # cannot push to another repository.
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/sur1cat/steward"
+    description: "The instrument panel for a fleet of coding agents"
+    license: MIT
+    commit_author:
+      name: goreleaser
+      email: noreply@github.com
+    commit_msg_template: "steward {{ .Tag }}"
+    # steward shells out to git for the worktree commands and reads
+    # ~/.claude directly; nothing else is required at runtime.
+    dependencies:
+      - name: git
+        type: optional
+    test: |
+      assert_match "steward", shell_output("#{bin}/steward version")
+    caveats: |
+      Wire steward into Claude Code with:
+
+        steward install
+
+      It watches and records until you say otherwise. See what it has seen:
+
+        steward log
+        steward check "git push origin main"
+
+      Run `pitwall perms` first — enforcing a ruleset full of rules that can
+      never match is not worth doing.
