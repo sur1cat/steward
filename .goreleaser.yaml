@@ -52,7 +52,7 @@ brews:
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Formula
     homepage: "https://github.com/sur1cat/steward"
-    description: "The instrument panel for a fleet of coding agents"
+    description: "Decide what your coding agent may execute, and record what was decided"
     license: MIT
     commit_author:
       name: goreleaser
