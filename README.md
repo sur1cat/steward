@@ -129,6 +129,33 @@ way is a command line that has already leaked it.
 On macOS the store is the login Keychain. Elsewhere it is a file with mode
 0600, which is weaker and says so when you ask.
 
+## Sharing a ruleset
+
+```sh
+steward share --note "backend service" --out team-rules.json
+steward adopt team-rules.json            # what it would change
+steward adopt team-rules.json --write    # apply it
+```
+
+A team should not each rebuild the same allow list by clicking "Yes, and don't
+ask again" a thousand times. Sharing one is also how you hand someone a
+credential by accident — 134 of the rules on the machine this was built for
+carried one — so a bundle is filtered and says what it left behind:
+
+```
+wrote 74 rules to team-rules.json
+left out: 3 never-consulted, 3 unmatchable, 2 one-off
+```
+
+Rules with a credential in the text are never exported, and neither are rules
+that cannot match, rules Claude Code ignores, or one-off literals from somebody
+else's afternoon.
+
+`adopt` writes nothing until asked. It marks the rules that **widen** what your
+agent may do, because accepting those is accepting somebody else's judgement
+about it, and an import only ever adds — your own deny rules are never removed
+by one.
+
 ## The log
 
 ```

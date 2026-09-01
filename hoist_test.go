@@ -1,44 +1,52 @@
 package main
 
 import (
+	"flag"
 	"reflect"
 	"testing"
 )
 
-func TestHoistFlagsKeepsFlagsWithTheirValues(t *testing.T) {
-	// Go's flag package stops at the first positional argument, so
-	// `test "cmd" --event x` would ignore the flag entirely.
-	got := hoistFlags([]string{"rm -rf build", "--event", "pre-tool-use"})
-	want := []string{"--event", "pre-tool-use", "rm -rf build"}
+func TestHoistFlagsAsksTheFlagSet(t *testing.T) {
+	fs := flag.NewFlagSet("t", flag.ContinueOnError)
+	var out, note string
+	var write bool
+	fs.StringVar(&out, "out", "", "")
+	fs.StringVar(&note, "note", "", "")
+	fs.BoolVar(&write, "write", false, "")
+
+	// The bug this replaces: --note was not on a hand-kept list, so its value
+	// became positional and --out swallowed the wrong argument.
+	got := hoistFlags(fs, []string{"--note", "a note", "--out", "f.json"})
+	want := []string{"--note", "a note", "--out", "f.json"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %q, want %q", got, want)
 	}
-	// A boolean flag must not swallow the command being tested.
-	got = hoistFlags([]string{"--json", "git status"})
-	want = []string{"--json", "git status"}
+
+	// A boolean must not consume what follows it.
+	got = hoistFlags(fs, []string{"--write", "positional"})
+	want = []string{"--write", "positional"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %q, want %q", got, want)
 	}
-	// Everything after -- is left alone.
-	got = hoistFlags([]string{"--", "--not-a-flag"})
+
+	// Positional first is the case the whole function exists for.
+	got = hoistFlags(fs, []string{"rm -rf build", "--out", "f.json"})
+	want = []string{"--out", "f.json", "rm -rf build"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %q, want %q", got, want)
+	}
+
+	// An unknown flag is left alone rather than guessed at.
+	got = hoistFlags(fs, []string{"--unknown", "value"})
+	want = []string{"--unknown", "value"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %q, want %q", got, want)
+	}
+
+	// Everything after -- is untouched.
+	got = hoistFlags(fs, []string{"--", "--not-a-flag"})
 	want = []string{"--", "--not-a-flag"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %q, want %q", got, want)
-	}
-}
-
-func TestEveryValueFlagIsHoistable(t *testing.T) {
-	// Every flag any subcommand declares with a value belongs here. Three
-	// separate bugs have come from one being missing: the flag is silently
-	// separated from its argument and the command reads the wrong thing.
-	for _, n := range []string{"event", "tool", "cwd", "mode", "project", "since", "n", "to"} {
-		if !flagTakesValue(n) {
-			t.Errorf("--%s takes a value but is not hoistable", n)
-		}
-	}
-	for _, n := range []string{"json", "write", "remove", "auto-allow", "mine"} {
-		if flagTakesValue(n) {
-			t.Errorf("--%s is a boolean and must not consume the next argument", n)
-		}
 	}
 }

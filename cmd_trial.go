@@ -27,7 +27,7 @@ func cmdTest(args []string) error {
 	fs.StringVar(&tool, "tool", "Bash", "the tool the call would use")
 	fs.StringVar(&cwd, "cwd", "", "run as if the session were in this directory")
 	fs.StringVar(&mode, "mode", "default", "the permission mode of the session")
-	if err := fs.Parse(hoistFlags(args)); err != nil {
+	if err := fs.Parse(hoistFlags(fs, args)); err != nil {
 		return err
 	}
 	subject := strings.Join(fs.Args(), " ")

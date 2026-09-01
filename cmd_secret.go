@@ -114,7 +114,7 @@ func secretWrite(store *vault.Store, args []string) error {
 	var to string
 	fs := flag.NewFlagSet("secret write", flag.ContinueOnError)
 	fs.StringVar(&to, "to", ".env", "the file to write into")
-	if err := fs.Parse(hoistFlags(args)); err != nil {
+	if err := fs.Parse(hoistFlags(fs, args)); err != nil {
 		return err
 	}
 	if fs.NArg() != 1 {
