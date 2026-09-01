@@ -31,7 +31,7 @@ func hoistFlags(args []string) []string {
 // flag must not, or it would swallow the command being tested.
 func flagTakesValue(name string) bool {
 	switch name {
-	case "event", "tool", "cwd", "mode", "project", "since", "n":
+	case "event", "tool", "cwd", "mode", "project", "since", "n", "to":
 		return true
 	}
 	return false

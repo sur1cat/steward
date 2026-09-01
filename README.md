@@ -102,6 +102,33 @@ community tools for this are both abandoned. `steward test` sends the payload
 Claude Code would send, through the same code that answers the real event, and
 prints both halves — so a dry run and the real thing cannot diverge.
 
+## Using a secret without putting it in the transcript
+
+```sh
+steward secret set PGPASSWORD                  # you type it, once, in your terminal
+steward secret use PGPASSWORD -- psql -h db    # the agent can write and record this
+steward secret write STRIPE_KEY --to .env      # value goes to the file, not the screen
+steward secret list                            # names only
+```
+
+Typing a value into a prompt writes it into the transcript forever, where it is
+replayed into the model on every later turn and kept in backups. Passing it as
+an argument does the same and puts it in `ps` as well. So it is typed once into
+a terminal the agent is not reading, stored, and referred to only by name.
+
+On the machine steward was built for, `pitwall perms` found **113 distinct
+credentials** that had reached permission rules exactly this way, and a database
+password appears in the prompt history twenty-three times.
+
+The value has two places and no others: the store, and the environment of the
+process that needs it. It is never an argument, never printed — not even
+partially — and no subcommand here returns it to a caller that might log it.
+`set` refuses to read from a pipe, because the only way a value arrives that
+way is a command line that has already leaked it.
+
+On macOS the store is the login Keychain. Elsewhere it is a file with mode
+0600, which is weaker and says so when you ask.
+
 ## The log
 
 ```

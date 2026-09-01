@@ -28,7 +28,10 @@ func TestHoistFlagsKeepsFlagsWithTheirValues(t *testing.T) {
 }
 
 func TestEveryValueFlagIsHoistable(t *testing.T) {
-	for _, n := range []string{"event", "tool", "cwd", "mode", "project", "since", "n"} {
+	// Every flag any subcommand declares with a value belongs here. Three
+	// separate bugs have come from one being missing: the flag is silently
+	// separated from its argument and the command reads the wrong thing.
+	for _, n := range []string{"event", "tool", "cwd", "mode", "project", "since", "n", "to"} {
 		if !flagTakesValue(n) {
 			t.Errorf("--%s takes a value but is not hoistable", n)
 		}
